@@ -1,9 +1,11 @@
-name: Publish Landing to GitHub Pages
+name: Deploy GitHub Pages (static)
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: ["main"]
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/pages.yml"
 
 permissions:
   contents: read
@@ -11,28 +13,25 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: "pages"
   cancel-in-progress: true
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload static site
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: apps/web
 
-      - name: Deploy
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
