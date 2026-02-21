@@ -16,12 +16,13 @@ const errors = {
 };
 
 const successNode = document.querySelector("#form-success");
-const endpoint = import.meta.env?.VITE_WAITLIST_ENDPOINT || "";
-const STORAGE_KEY = "dyhouse_waitlist_preview_web";
+const endpoint = (window.DYHOUSE_WAITLIST_ENDPOINT || "").trim();
+const MOCK_STORE_KEY = "dyhouse_waitlist_web_preview";
 
 function normalizeEmail(raw) {
   const value = String(raw || "").trim().toLowerCase();
   if (!value) return "";
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   return emailRegex.test(value) ? value : null;
 }
@@ -30,6 +31,20 @@ function normalizePhone(raw) {
   const value = String(raw || "").replace(/\D/g, "");
   if (!value) return "";
   return value.length >= 8 ? value : null;
+}
+
+function formatPhoneInput(raw) {
+  const digits = String(raw || "").replace(/\D/g, "").slice(0, 11);
+
+  if (!digits) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
 function clearMessages() {
@@ -44,13 +59,13 @@ function clearMessages() {
   fields.phone.removeAttribute("aria-invalid");
 }
 
-function setSuccessMessage(message) {
-  successNode.textContent = message;
-}
-
 function setFieldError(fieldName, message) {
   errors[fieldName].textContent = message;
   fields[fieldName].setAttribute("aria-invalid", "true");
+}
+
+function setSuccessMessage(message) {
+  successNode.textContent = message;
 }
 
 function setFormLoading(isLoading) {
@@ -58,50 +73,11 @@ function setFormLoading(isLoading) {
   submitButton.textContent = isLoading ? "Enviando..." : "Avise-me";
 }
 
-function getMockStore() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return {
-      emails: Array.isArray(parsed.emails) ? parsed.emails : [],
-      phones: Array.isArray(parsed.phones) ? parsed.phones : []
-    };
-  } catch {
-    return { emails: [], phones: [] };
-  }
-}
-
-function setMockStore(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-function simulateSubmit(payload) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const store = getMockStore();
-
-      if (payload.email && store.emails.includes(payload.email)) {
-        resolve({ ok: false, code: "EMAIL_EXISTS" });
-        return;
-      }
-
-      if (payload.phone && store.phones.includes(payload.phone)) {
-        resolve({ ok: false, code: "PHONE_EXISTS" });
-        return;
-      }
-
-      if (payload.email) store.emails.push(payload.email);
-      if (payload.phone) store.phones.push(payload.phone);
-      setMockStore(store);
-
-      resolve({ ok: true });
-    }, 600);
-  });
-}
-
 function validatePayload(rawData) {
   const name = String(rawData.name || "").trim();
   const email = normalizeEmail(rawData.email);
   const phone = normalizePhone(rawData.phone);
+  const website = String(rawData.website || "").trim();
 
   let hasError = false;
 
@@ -110,12 +86,12 @@ function validatePayload(rawData) {
     hasError = true;
   }
 
-  if (rawData.email.trim() && email === null) {
+  if (String(rawData.email || "").trim() && email === null) {
     setFieldError("email", "E-mail inválido.");
     hasError = true;
   }
 
-  if (rawData.phone.trim() && phone === null) {
+  if (String(rawData.phone || "").trim() && phone === null) {
     setFieldError("phone", "Telefone inválido.");
     hasError = true;
   }
@@ -125,7 +101,7 @@ function validatePayload(rawData) {
     hasError = true;
   }
 
-  if (rawData.website.trim()) {
+  if (website) {
     errors.form.textContent = "Não foi possível cadastrar agora. Tente novamente.";
     hasError = true;
   }
@@ -136,20 +112,60 @@ function validatePayload(rawData) {
       name,
       email: email || undefined,
       phone: phone || undefined,
-      website: String(rawData.website || "").trim()
+      website
     }
   };
 }
 
-async function submitWaitlist(payload) {
-  if (!endpoint) {
-    const result = await simulateSubmit(payload);
+function shouldUseMockSubmit() {
+  if (!endpoint) return true;
+  return endpoint.includes("<project-id>");
+}
+
+function getMockStore() {
+  try {
+    const data = JSON.parse(localStorage.getItem(MOCK_STORE_KEY) || "{}");
+
     return {
-      ok: result.ok,
-      status: result.ok ? 201 : 409,
-      code: result.code,
-      data: result
+      emails: Array.isArray(data.emails) ? data.emails : [],
+      phones: Array.isArray(data.phones) ? data.phones : []
     };
+  } catch {
+    return { emails: [], phones: [] };
+  }
+}
+
+function setMockStore(data) {
+  localStorage.setItem(MOCK_STORE_KEY, JSON.stringify(data));
+}
+
+function mockSubmit(payload) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const store = getMockStore();
+
+      if (payload.email && store.emails.includes(payload.email)) {
+        resolve({ ok: false, status: 409, code: "EMAIL_EXISTS" });
+        return;
+      }
+
+      if (payload.phone && store.phones.includes(payload.phone)) {
+        resolve({ ok: false, status: 409, code: "PHONE_EXISTS" });
+        return;
+      }
+
+      if (payload.email) store.emails.push(payload.email);
+      if (payload.phone) store.phones.push(payload.phone);
+
+      setMockStore(store);
+      resolve({ ok: true, status: 201, code: null });
+    }, 600);
+  });
+}
+
+async function submitWaitlist(payload) {
+  if (shouldUseMockSubmit()) {
+    return mockSubmit(payload);
   }
 
   const response = await fetch(endpoint, {
@@ -165,7 +181,7 @@ async function submitWaitlist(payload) {
   return {
     ok: response.ok,
     status: response.status,
-    code: data?.code,
+    code: data.code,
     data
   };
 }
@@ -221,8 +237,11 @@ async function handleSubmit(event) {
   }
 }
 
-[fields.name, fields.email, fields.phone].forEach((input) => {
-  input.addEventListener("input", clearMessages);
+fields.name.addEventListener("input", clearMessages);
+fields.email.addEventListener("input", clearMessages);
+fields.phone.addEventListener("input", () => {
+  fields.phone.value = formatPhoneInput(fields.phone.value);
+  clearMessages();
 });
 
 form.addEventListener("submit", handleSubmit);

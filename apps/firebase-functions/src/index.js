@@ -9,6 +9,18 @@ const db = getFirestore();
 const WAITLIST_COLLECTION = "waitlist";
 const UNIQUE_COLLECTION = "waitlist_uniques";
 
+const configuredOrigins = (process.env.WAITLIST_ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const allowedCorsOrigins = [
+  /^http:\/\/localhost:\d+$/,
+  /^http:\/\/127\.0\.0\.1:\d+$/,
+  /^https:\/\/[a-z0-9-]+\.github\.io$/,
+  ...configuredOrigins
+];
+
 function normalizeEmail(raw) {
   const value = String(raw || "").trim().toLowerCase();
   if (!value) return "";
@@ -81,7 +93,7 @@ class ConflictError extends Error {
   }
 }
 
-export const submitWaitlist = onRequest({ cors: true, region: "us-central1" }, async (req, res) => {
+export const submitWaitlist = onRequest({ cors: allowedCorsOrigins, region: "us-central1" }, async (req, res) => {
   if (req.method === "OPTIONS") {
     res.status(204).send("");
     return;
@@ -125,6 +137,7 @@ export const submitWaitlist = onRequest({ cors: true, region: "us-central1" }, a
       if (emailHash) {
         emailUniqueRef = db.collection(UNIQUE_COLLECTION).doc(`email_${emailHash}`);
         const emailUniqueSnap = await tx.get(emailUniqueRef);
+
         if (emailUniqueSnap.exists) {
           throw new ConflictError("EMAIL_EXISTS");
         }
@@ -133,6 +146,7 @@ export const submitWaitlist = onRequest({ cors: true, region: "us-central1" }, a
       if (phoneHash) {
         phoneUniqueRef = db.collection(UNIQUE_COLLECTION).doc(`phone_${phoneHash}`);
         const phoneUniqueSnap = await tx.get(phoneUniqueRef);
+
         if (phoneUniqueSnap.exists) {
           throw new ConflictError("PHONE_EXISTS");
         }
