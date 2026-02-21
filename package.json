@@ -1,0 +1,19 @@
+{
+  "name": "breve-page",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/web",
+    "apps/api",
+    "apps/firebase-functions"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace apps/api\" \"npm run dev --workspace apps/web\"",
+    "dev:web": "npm run dev --workspace apps/web",
+    "build": "npm run build --workspace apps/web",
+    "check:firebase": "npm run check --workspace apps/firebase-functions"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
