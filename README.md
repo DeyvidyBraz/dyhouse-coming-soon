@@ -11,7 +11,7 @@ Monorepo consolidado com uma única landing real em `/apps/web` e backend Fireba
 
 ## 1) Preview local da landing
 
-### Opção A (abrir direto)
+### Opção A (abrir direto - apenas visual)
 
 ```bash
 open apps/web/index.html
@@ -24,7 +24,10 @@ npm i
 npm run serve:web
 ```
 
-Depois acesse: `http://localhost:8080`
+Depois acesse: `http://localhost:5173`
+
+Importante: para envio real no Firebase, use `http://localhost` ou HTTPS.  
+Em `file://` o projeto entra em modo de teste (mock), para evitar travas de import/módulo no navegador.
 
 ## 2) Endpoint configurável (sem build)
 
@@ -89,3 +92,15 @@ Workflow: `/.github/workflows/pages.yml`
 - duplicidade:
   - `EMAIL_EXISTS` -> `Esse e-mail já está cadastrado.`
   - `PHONE_EXISTS` -> `Esse telefone já está cadastrado.`
+
+## 6) Smoke test rápido
+
+1. Rode `npm run serve:web`.
+2. Abra `http://localhost:5173`.
+3. Envie `name + email` no formulário.
+4. Verifique:
+   - botão volta de `Enviando...` para `Avise-me`
+   - mensagem de sucesso aparece
+5. Verifique no Firestore:
+   - coleção `waitlist`
+   - novo documento com `name`, `email/phone` e `createdAt`.

@@ -63,6 +63,40 @@
     </main>
 
     <script src="./config.js"></script>
+
+
+
+<script type="module">
+  window.__firebaseReadyPromise = (async () => {
+    try {
+      const [{ initializeApp }, { getFirestore, collection, addDoc, serverTimestamp }] = await Promise.all([
+        import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
+        import("https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js")
+      ]);
+
+      window.__firebaseApp = initializeApp({
+        apiKey: "AIzaSyC3EKTB2AqXUOGicnD2LiOFl6qseG7Ajyk",
+        authDomain: "apnovo-b1bdd.firebaseapp.com",
+        projectId: "apnovo-b1bdd",
+        storageBucket: "apnovo-b1bdd.firebasestorage.app",
+        messagingSenderId: "868326314281",
+        appId: "1:868326314281:web:27bef6674e41b4392ae738"
+      });
+
+      window.__db = getFirestore(window.__firebaseApp);
+      window.__firestoreFns = { collection, addDoc, serverTimestamp };
+      return true;
+    } catch (error) {
+      window.__db = null;
+      window.__firestoreFns = null;
+      console.error("Falha ao inicializar Firebase:", error);
+      return false;
+    }
+  })();
+</script>
+
+
+
     <script src="./main.js"></script>
   </body>
 </html>

@@ -16,8 +16,8 @@ const errors = {
 };
 
 const successNode = document.querySelector("#form-success");
+const endpoint = (window.DYHOUSE_WAITLIST_ENDPOINT || "").trim();
 const MOCK_STORE_KEY = "dyhouse_waitlist_web_preview";
-const isFileProtocol = window.location.protocol === "file:";
 
 function normalizeEmail(raw) {
   const value = String(raw || "").trim().toLowerCase();
@@ -73,31 +73,6 @@ function setFormLoading(isLoading) {
   submitButton.textContent = isLoading ? "Enviando..." : "Avise-me";
 }
 
-function hasFirebaseRuntime() {
-  return Boolean(window.__db && window.__firestoreFns);
-}
-
-function shouldUseMockSubmit() {
-  return !hasFirebaseRuntime();
-}
-
-async function waitForFirebaseReady(timeoutMs = 6000) {
-  if (!window.__firebaseReadyPromise) return false;
-
-  try {
-    const ready = await Promise.race([
-      window.__firebaseReadyPromise,
-      new Promise((resolve) => {
-        setTimeout(() => resolve(false), timeoutMs);
-      })
-    ]);
-
-    return Boolean(ready);
-  } catch {
-    return false;
-  }
-}
-
 function validatePayload(rawData) {
   const name = String(rawData.name || "").trim();
   const email = normalizeEmail(rawData.email);
@@ -142,6 +117,11 @@ function validatePayload(rawData) {
   };
 }
 
+function shouldUseMockSubmit() {
+  if (!endpoint) return true;
+  return endpoint.includes("<project-id>");
+}
+
 function getMockStore() {
   try {
     const data = JSON.parse(localStorage.getItem(MOCK_STORE_KEY) || "{}");
@@ -183,44 +163,27 @@ function mockSubmit(payload) {
   });
 }
 
-async function firebaseSubmit(payload) {
-  const { collection, addDoc, serverTimestamp } = window.__firestoreFns;
+async function submitWaitlist(payload) {
+  if (shouldUseMockSubmit()) {
+    return mockSubmit(payload);
+  }
 
-  const writeOperation = addDoc(collection(window.__db, "waitlist"), {
-    name: payload.name,
-    email: payload.email || null,
-    phone: payload.phone || null,
-    createdAt: serverTimestamp()
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
   });
 
-  await Promise.race([
-    writeOperation,
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("FIREBASE_TIMEOUT")), 10000);
-    })
-  ]);
+  const data = await response.json().catch(() => ({}));
 
-  return { ok: true, status: 201, code: null, data: {} };
-}
-
-async function submitWaitlist(payload) {
-  if (isFileProtocol) {
-    const response = await mockSubmit(payload);
-    return { ...response, mode: "file" };
-  }
-
-  const firebaseReady = await waitForFirebaseReady();
-
-  if (firebaseReady && !shouldUseMockSubmit()) {
-    try {
-      return await firebaseSubmit(payload);
-    } catch (error) {
-      console.error("Falha no submit Firebase:", error);
-      return { ok: false, status: 500, code: "FIREBASE_SUBMIT_ERROR", data: {} };
-    }
-  }
-
-  return mockSubmit(payload);
+  return {
+    ok: response.ok,
+    status: response.status,
+    code: data.code,
+    data
+  };
 }
 
 async function handleSubmit(event) {
@@ -244,13 +207,7 @@ async function handleSubmit(event) {
 
     if (response.ok && response.status === 201) {
       form.reset();
-      if (response.mode === "file") {
-        setSuccessMessage(
-          "Cadastro confirmado! Vamos avisar em primeira mão. (Modo local de teste. Para gravar no Firebase, rode em http://localhost.)"
-        );
-      } else {
-        setSuccessMessage("Cadastro confirmado! Vamos avisar em primeira mão.");
-      }
+      setSuccessMessage("Cadastro confirmado! Vamos avisar em primeira mão.");
       return;
     }
 
@@ -273,8 +230,7 @@ async function handleSubmit(event) {
     }
 
     errors.form.textContent = "Não foi possível cadastrar agora. Tente novamente.";
-  } catch (error) {
-    console.error("Erro inesperado no submit:", error);
+  } catch {
     errors.form.textContent = "Não foi possível cadastrar agora. Tente novamente.";
   } finally {
     setFormLoading(false);
